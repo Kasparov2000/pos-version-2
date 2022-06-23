@@ -1,0 +1,16 @@
+{
+  "name": "pos-version-2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "devDependencies": {
+    "eslint": "8.18.0",
+    "eslint-config-next": "12.1.6",
+    "prisma": "^3.15.2"
+  }
+}
