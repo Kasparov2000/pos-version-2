@@ -10,7 +10,25 @@
   },
   "devDependencies": {
     "eslint": "8.18.0",
-    "eslint-config-next": "12.1.6",
-    "prisma": "^3.15.2"
+    "eslint-config-next": "^12.2.0",
+    "prisma": "^4.0.0"
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^2.2.1",
+    "@next-auth/prisma-adapter": "^1.0.3",
+    "@prisma/client": "^4.0.0",
+    "@truffle/hdwallet-provider": "^1.0.41-1",
+    "argon2": "^0.28.5",
+    "cookie": "^0.5.0",
+    "cuid": "^2.1.8",
+    "currency.js": "^2.0.4",
+    "dinero": "^1.0.1",
+    "dinero.js": "^1.9.1",
+    "joi": "^17.6.0",
+    "jose": "^4.8.3",
+    "jsonwebtoken": "^8.5.1",
+    "money": "^0.2.0",
+    "next": "^12.2.0",
+    "next-auth": "^4.8.0"
   }
 }

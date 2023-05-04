@@ -1,0 +1,478 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["referentialIntegrity", "interactiveTransactions"]
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                                   Int                        @id @default(autoincrement())
+  firstName                            String                     @map("first_name")
+  lastName                             String                     @map("last_name")
+  username                             String                     @unique
+  password                             String
+  phoneNumber                          String                     @unique @map("phone_number")
+  isAdmin                              Boolean                    @default(false)
+  createdAt                            DateTime                   @default(now()) @map("created_at")
+  updatedAt                            DateTime                   @updatedAt @map("updated_at")
+  lastLogin                            DateTime?                  @map("last_login")
+  emailAddress                         String?                    @map("email_address")
+  Invoices                             Invoice[]
+  journalTransactions                  Journal[]
+  actions                              Action[]
+  transactionTransactions              Transaction[]
+  SalesJournalTransactions             SalesJournal[]
+  PurchasesJournalTransactions         PurchasesJournal[]
+  CashDisbursementsJournalTransactions CashDisbursementsJournal[]
+  CashReceiptsJournalTransactions      CashReceiptsJournal[]
+  ReturnsInwardsJournalTransactions    ReturnsInwardsJournal[]
+  ReturnsOutwardsJournalTransactions   ReturnsOutwardsJournal[]
+}
+
+model Action {
+  id          String  @id @default(cuid())
+  user        User    @relation(fields: [userId], references: [id])
+  userId      Int     @map("user_id")
+  actionType  Boolean @map("action_type")
+  description String
+}
+
+enum ActionType {
+  VIEW
+  UPDATE
+  DELETE
+  ADD
+}
+
+model Transaction {
+  id                  Int                    @id @default(autoincrement())
+  initiatedBy         Int                    @map("cashier_id")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  totalPaid           Decimal?               @map("total_amount") @db.Decimal(12, 2)
+  totalPayable        Decimal?               @map("total_payable") @db.Decimal(12, 2)
+  supplierId          String?                @map("supplier_id")
+  errorDescription    String?                @map("error_description")
+  customerId          String?                @map("customer_id")
+  type                TransactionType
+  status              TransactionStatusCodes
+  users               User                   @relation(fields: [initiatedBy], references: [id], onDelete: Restrict)
+  customer            Customer?              @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier            Supplier?              @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  payments            Payment[]
+  invoices            Invoice[]
+  journalTransactions Journal[]
+
+  salesJournalTransactions             SalesJournal[]
+  purchasesJournalTransactions         PurchasesJournal[]
+  cashDisbursementsJournalTransactions CashDisbursementsJournal[]
+  cashReceiptsJournalTransactions      CashReceiptsJournal[]
+  returnsInwardsJournalTransactions    ReturnsInwardsJournal[]
+  returnsOutwardsJournalTransactions   ReturnsOutwardsJournal[]
+  @@index([initiatedBy], map: "transactions_cashier_id_fkey")
+  @@index([customerId], map: "transactions_customerId_fkey")
+  @@index([supplierId], map: "transactions_supplierId_fkey")
+  @@map("transactions")
+}
+
+model Payment {
+  id                                       String                     @id @default(cuid())
+  paymentType                              PaymentType                @relation(fields: [paymentTypeId], references: [id])
+  paymentTypeId                            String                     @map("payment_type_id")
+  currencyId                               String                     @map("currency_id")
+  transactionId                            Int                        @map("transaction_id")
+  paid                                     Decimal                    @db.Decimal(12, 2)
+  transaction                              Transaction                @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  currency                                 Currency                   @relation(fields: [currencyId], references: [id], onDelete: Cascade)
+  PaymentTypeOnExchangeRates               PaymentTypeOnExchangeRates @relation(fields: [paymentTypeOnExchangeRatesPaymentTypeId, paymentTypeOnExchangeRatesExchangeRateId], references: [paymentTypeId, exchangeRateId], onDelete: Cascade)
+  paymentTypeOnExchangeRatesPaymentTypeId  String
+  paymentTypeOnExchangeRatesExchangeRateId String
+}
+
+model PaymentType {
+  id                         String                       @id @default(cuid())
+  paymentTypeName            String                       @unique @map("payment_type_name")
+  payments                   Payment[]
+  charges                    Decimal                      @db.Decimal(12, 2)
+  promotion                  Promotion?                   @relation("PaymentTypePromotions", fields: [promotionId], references: [id])
+  promotionId                String?
+  tax                        Tax?                         @relation("PaymentTypeTaxes", fields: [taxId], references: [id])
+  taxId                      String?
+  taxes                      Tax[]
+  promotions                 Promotion[]
+  PaymentTypeOnExchangeRates PaymentTypeOnExchangeRates[]
+  deleted                    Boolean                      @default(false)
+}
+
+model Amount {
+  id         String   @id @default(cuid())
+  amount     Decimal
+  currency   Currency @relation(fields: [currencyId], references: [id])
+  currencyId String
+}
+
+model ExchangeRate {
+  id                         String                       @id @default(cuid())
+  exchangeRate               Decimal                      @map("exchange_rate")
+  currencyId                 String                       @map("currency_id")
+  createdAt                  DateTime                     @default(now()) @map("created_at")
+  baseCurrencyId             String                       @map("base_currency_id")
+  active                     Boolean                      @default(true)
+  baseCurrency               BaseCurrency                 @relation(fields: [baseCurrencyId], references: [id], map: "exchangeRates_baseCurrencyId_fkey", onDelete: Cascade)
+  currency                   Currency                     @relation(fields: [currencyId], references: [id], map: "exchangeRates_currencyId_fkey", onDelete: Cascade)
+  prices                     Price[]
+  paymentTypeOnExchangeRates PaymentTypeOnExchangeRates[]
+}
+
+model PaymentTypeOnExchangeRates {
+  paymentTypeId  String       @default(cuid())
+  paymentType    PaymentType  @relation(fields: [paymentTypeId], references: [id])
+  exchangeRate   ExchangeRate @relation(fields: [exchangeRateId], references: [id])
+  exchangeRateId String
+  payments       Payment[]
+  factor         Decimal
+  active         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+
+  @@id([paymentTypeId, exchangeRateId])
+}
+
+model Tax {
+  id            String         @id @default(cuid())
+  taxName       String         @map("tax_name")
+  taxRate       Decimal        @map("tax_rate")
+  startAmount   Decimal?       @map("start_amount") @db.Decimal(12, 2)
+  endAmount     Decimal?       @map("end_amount") @db.Decimal(12, 2)
+  active        Boolean        @default(true)
+  startDate     DateTime?      @map("start_date")
+  endDate       DateTime?      @map("end_date")
+  perpetual     Boolean        @default(false)
+  currencies    Currency[]
+  products      Product[]
+  invoices      Invoice[]
+  productGroups ProductGroup[]
+  paymentTypes  PaymentType[]  @relation("PaymentTypeTaxes")
+  PaymentType   PaymentType?   @relation(fields: [paymentTypeId], references: [id])
+  paymentTypeId String?
+}
+
+model Promotion {
+  id            String         @id @default(cuid())
+  promotionName String
+  description   String         @db.VarChar(3000)
+  products      Product[]
+  productGroups ProductGroup[]
+  startDate     DateTime?      @map("start_date")
+  endDate       DateTime?      @map("end_date")
+  perpetual     Boolean        @default(false)
+  active        Boolean        @default(true)
+  discountRate  Decimal        @map("discount_rate") @db.Decimal(12, 5)
+  paymentTypes  PaymentType[]  @relation("PaymentTypePromotions")
+  PaymentType   PaymentType?   @relation(fields: [paymentTypeId], references: [id])
+  paymentTypeId String?
+}
+
+model ProductGroup {
+  products          Product[]
+  barcode           String          @id
+  measurementAmount Int             @map("measurement_amount")
+  measurementUnit   MeasurementUnit @map("measurement_unit")
+  productGroupName  String          @map("product_group_name")
+  prices            Price[]
+  promotions        Promotion[]
+  taxes             Tax[]
+  totalQuantity     Int
+
+  @@unique([barcode, measurementAmount, measurementUnit, productGroupName])
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  sku          String
+  expiryDate   DateTime      @map("expiry_date") @db.Date
+  cost         Decimal       @db.Decimal(12, 2)
+  supplierId   String?       @map("supplier_id")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  depleted     Boolean       @default(false)
+  expired      Boolean       @default(false)
+  disposed     Boolean       @default(false)
+  supplier     Supplier?     @relation(fields: [supplierId], references: [id])
+  disposals    Disposal[]    @relation("disposalsToproducts")
+  promotions   Promotion[]
+  invoices     Invoice[]
+  productGroup ProductGroup? @relation(fields: [barcode], references: [barcode])
+  barcode      String?       @map("product_group_barcode_id")
+  taxes        Tax[]
+
+  @@index([supplierId], map: "products_supplierId_fkey")
+  @@map("products")
+}
+
+model Price {
+  id                  String        @id @default(cuid())
+  barcode             String
+  price               Decimal       @db.Decimal(12, 2)
+  active              Boolean
+  productId           String?       @map("product_id")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  exchangeRate        ExchangeRate? @relation(fields: [exchangeRatesId], references: [id])
+  exchangeRatesId     String?       @map("exchange_rates_id")
+  productGroup        ProductGroup? @relation(fields: [productGroupBarcode], references: [barcode])
+  productGroupBarcode String?
+
+}
+
+model Invoice {
+  id            String      @id @default(cuid())
+  productId     String      @map("product_id")
+  discount      Decimal     @default(0.00) @db.Decimal(12, 2)
+  price         Decimal     @db.Decimal(12, 2)
+  quantity      Int
+  transactionId Int         @map("transaction_id")
+  cashierId     Int
+  taxes         Tax[]
+  customerId    String?     @map("customerId")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  cashier       User        @relation(fields: [cashierId], references: [id], onDelete: Restrict)
+  customer      Customer?   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product       Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  supplierId String?   @map("supplier_id")
+  @@index([cashierId], map: "invoice_cashierId_fkey")
+  @@index([customerId], map: "invoice_customerId_fkey")
+  @@index([productId], map: "invoice_product_id_fkey")
+  @@index([transactionId], map: "invoice_transaction_id_fkey")
+  @@map("invoices")
+}
+
+model Supplier {
+  id            String        @id @default(cuid())
+  firstName     String?       @map("first_name")
+  lastName      String?       @map("last_name")
+  phoneNumber   String?       @unique @map("phone_number")
+  corporateName String?       @unique @map("corporate_name")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  emailAddress  String?       @unique @map("email_address")
+  addresses     Address[]     @relation("addressTosuppliers")
+  products      Product[]
+  invoices      Invoice[]
+  transactions  Transaction[]
+
+  journalTransactions                  Journal[]
+  salesJournalTransactions             SalesJournal[]
+  cashDisbursementsJournalTransactions CashDisbursementsJournal[]
+  cashReceiptsJournalTransactions      CashReceiptsJournal[]
+  returnsOutwardsJournalTransactions   ReturnsOutwardsJournal[]
+  accountTransactions                  Account[]
+  @@map("suppliers")
+}
+
+model Customer {
+  id                                   String                     @id @default(cuid())
+  firstName                            String                     @map("first_name")
+  lastName                             String                     @map("last_name")
+  phoneNumber                          String?                    @map("phone_number")
+  emailAddress                         String?                    @map("email_address")
+  updatedAt                            DateTime                   @updatedAt @map("updated_at")
+  createdAt                            DateTime                   @default(now()) @map("created_at")
+  addresses                            Address[]                  @relation("addressTocustomers")
+  invoices                             Invoice[]
+  transactions                         Transaction[]
+  journalTransactions                  Journal[]
+  purchasesJournalTransactions         PurchasesJournal[]
+  cashDisbursementsJournalTransactions CashDisbursementsJournal[]
+  cashReceiptsJournalTransactions      CashReceiptsJournal[]
+  returnsInwardsJournalTransactions    ReturnsInwardsJournal[]
+
+  salesJournalTransactions SalesJournal[]
+  accountTransactions      Account[]
+  @@map("customers")
+}
+
+model Account {
+  id         String    @id @default(cuid())
+  supplier   Supplier? @relation(fields: [supplierId], references: [id])
+  supplierId String?   @map("supplier_id")
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  customerId String?   @map("customer_id")
+  balance    Decimal   @db.Decimal(12, 2)
+}
+
+model Address {
+  id         String    @id @default(cuid())
+  supplierId String?   @map("supplierId")
+  customerId String?   @map("customerId")
+  street     String
+  city       String
+  country    String
+  zip        String?
+  customer   Customer? @relation("addressTocustomers", fields: [customerId], references: [id], map: "Address_customerId_fkey")
+  supplier   Supplier? @relation("addressTosuppliers", fields: [supplierId], references: [id], map: "Address_supplierId_fkey")
+
+  @@index([customerId], map: "Address_customerId_fkey")
+  @@index([supplierId], map: "Address_supplierId_fkey")
+}
+
+model BaseCurrency {
+  id            String         @id @default(cuid())
+  currencyId    String         @map("currency_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  active        Boolean        @default(true)
+  currency      Currency       @relation(fields: [currencyId], references: [id], map: "baseCurrency_currencyId_fkey", onDelete: Cascade)
+  exchangeRates ExchangeRate[]
+}
+
+model Currency {
+  id             String         @id @default(cuid())
+  currencyCode   String         @unique(map: "Currency_currencyCode_key") @map("currency_code")
+  currencyName   String         @unique(map: "Currency_currencyName_key") @map("currency_name")
+  currencySymbol String         @map("currency_symbol")
+  updatedAt      DateTime       @default(now()) @map("updated_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  baseCurrency   BaseCurrency[]
+  exchangeRates  ExchangeRate[]
+  payments       Payment[]
+  taxes          Tax[]
+  Amount         Amount[]
+}
+
+model Disposal {
+  id        String   @id @default(cuid())
+  productId String   @map("product_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  product   Product  @relation("disposalsToproducts", fields: [productId], references: [id])
+
+  @@index([productId], map: "Disposals_productId_fkey")
+}
+
+model Journal {
+  id            String       @id @default(cuid())
+  recorder      User         @relation(fields: [recorderId], references: [id])
+  recorderId    Int          @map("recepient_id")
+  supplier      Supplier?    @relation(fields: [supplierId], references: [id])
+  supplierId    String?      @map("supplier_id")
+  customer      Customer?    @relation(fields: [customerId], references: [id])
+  customerId    String?      @map("customer_id")
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId Int?         @map("transaction_id")
+  narration     String
+  amount        Decimal      @db.Decimal(12, 2)
+}
+
+model SalesJournal {
+  id            String       @id @default(cuid())
+  recorder      User         @relation(fields: [recorderId], references: [id])
+  recorderId    Int          @map("recorder_id")
+  customer      Customer?    @relation(fields: [customerId], references: [id])
+  customerId    String?      @map("customer_id")
+  supplier      Supplier?    @relation(fields: [supplierId], references: [id])
+  supplierId    String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId Int?
+  narration     String
+  amount        Decimal      @db.Decimal(12, 2)
+}
+
+model PurchasesJournal {
+  id            String       @id @default(cuid())
+  recorder      User         @relation(fields: [recorderId], references: [id])
+  recorderId    Int          @map("recorder_id")
+  customer      Customer?    @relation(fields: [customerId], references: [id])
+  customerId    String?      @map("customer_id")
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId Int?         @map("transaction_id")
+  narration     String
+  amount        Decimal      @db.Decimal(12, 2)
+}
+
+model CashDisbursementsJournal {
+  id               String               @id @default(cuid())
+  recorder         User                 @relation(fields: [recorderId], references: [id])
+  recorderId       Int                  @map("recorder_id")
+  supplier         Supplier?            @relation(fields: [supplierId], references: [id])
+  supplierId       String?              @map("supplier_id")
+  customer         Customer?            @relation(fields: [customerId], references: [id])
+  customerId       String?              @map("customer_id")
+  transaction      Transaction?         @relation(fields: [transactionId], references: [id])
+  transactionId    Int?                 @map("transaction_id")
+  cashDisbursement CashDisbursementType
+  narration        String
+  amount           Decimal              @db.Decimal(12, 2)
+}
+
+enum CashDisbursementType {
+  CASH_PURCHASES
+  DEBT_SETTLEMENT
+  EXPENSE_PAYMENT
+}
+
+model CashReceiptsJournal {
+  id              String          @id @default(cuid())
+  recorder        User            @relation(fields: [recorderId], references: [id])
+  recorderId      Int             @map("recorder_id")
+  supplier        Supplier?       @relation(fields: [supplierId], references: [id])
+  supplierId      String?         @map("supplier_id")
+  customer        Customer?       @relation(fields: [customerId], references: [id])
+  customerId      String?         @map("customer_id")
+  transaction     Transaction?    @relation(fields: [transactionId], references: [id])
+  transactionId   Int?            @map("transaction_id")
+  cashReceiptType CashReceiptType
+
+  narration String
+  amount    Decimal @db.Decimal(12, 2)
+}
+
+enum CashReceiptType {
+  CASH_SALES
+  CREDIT_SETTLEMENT
+}
+
+model ReturnsInwardsJournal {
+  id            String       @id @default(cuid())
+  recorder      User         @relation(fields: [recorderId], references: [id])
+  recorderId    Int          @map("recorder_id")
+  customer      Customer     @relation(fields: [customerId], references: [id])
+  customerId    String       @map("customer_id")
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId Int?         @map("transaction_id")
+  narration     String
+  amount        Decimal      @db.Decimal(12, 2)
+}
+
+model ReturnsOutwardsJournal {
+  id            String       @id @default(cuid())
+  recorder      User         @relation(fields: [recorderId], references: [id])
+  recorderId    Int          @map("recorder_id")
+  supplier      Supplier     @relation(fields: [supplierId], references: [id])
+  supplierId    String       @map("supplier_id")
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  transactionId Int?         @map("transaction_id")
+  narration     String
+  amount        Decimal      @db.Decimal(12, 2)
+}
+
+enum TransactionType {
+  PURCHASE
+  SALES
+}
+
+enum TransactionStatusCodes {
+  PENDING
+  FAILED
+  SUCCEEDED
+}
+
+enum MeasurementUnit {
+  KILOGRAMS
+  GRAMS
+  LITRES
+  MILLILITRES
+}
